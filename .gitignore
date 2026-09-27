@@ -1,0 +1,44 @@
+.venv/
+.appvenv/
+.runtime/
+.mineru-venv/
+.mineru/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
+demo-data/
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Local coursework, diagnostics and private verification history
+artifacts/
+VALIDATION.md
+reports/
+submissions/
+diagnostics/
+settings*.json
+course_binding.json
+*.sqlite*
+*.db
+*.log
+*.bak
+
+# Credentials and local environment configuration
+.env
+.env.*
+!.env.example
+.secret
+.secret.*
+!.secret.example
+*.pem
+*.key
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
