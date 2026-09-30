@@ -24,8 +24,9 @@ def test_docx_uses_native_flash_without_mutating_caller(tier, attached):
 
 
 @pytest.mark.parametrize("suffix", ["pdf", "png", "jpg", "txt", "doc"])
-def test_other_formats_keep_configured_tier(suffix):
-    args = ["parse", f"answer.{suffix}", "--tier", "standard", "-o", "document.md"]
+@pytest.mark.parametrize("tier", ["standard", "advanced"])
+def test_other_formats_keep_configured_tier(suffix, tier):
+    args = ["parse", f"answer.{suffix}", "--tier", tier, "-o", "document.md"]
     assert wrapper.normalize_parse_args(args) == args
 
 
@@ -85,10 +86,11 @@ def test_all_explicit_tiers_use_flash_for_single_docx():
     ["--pages", "1-3"], ["--pages=1-3"], ["-p1-3"],
 ])
 @pytest.mark.parametrize("extension", ["docx", "PNG", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif", "jp2"])
-def test_single_docx_and_images_remove_pdf_only_page_option(option, extension):
-    args = ["parse", f"answer.{extension}", *option, "--tier", "standard", "-o", "out.md"]
-    tier = "flash" if extension == "docx" else "standard"
-    assert wrapper.normalize_parse_args(args) == ["parse", f"answer.{extension}", "--tier", tier, "-o", "out.md"]
+@pytest.mark.parametrize("tier", ["standard", "advanced"])
+def test_single_docx_and_images_remove_pdf_only_page_option(option, extension, tier):
+    args = ["parse", f"answer.{extension}", *option, "--tier", tier, "-o", "out.md"]
+    expected_tier = "flash" if extension == "docx" else tier
+    assert wrapper.normalize_parse_args(args) == ["parse", f"answer.{extension}", "--tier", expected_tier, "-o", "out.md"]
 
 
 @pytest.mark.parametrize("option", [["-vpall"], ["-vvp", "all"]])

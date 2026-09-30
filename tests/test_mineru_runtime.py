@@ -25,6 +25,7 @@ def test_stock_missing_command_is_repaired_without_mutating_config(tmp_path, mon
     before = copy.deepcopy(config)
     result = runtime.resolve_ocr_config(config, search_roots=[tmp_path])
     assert result["command"] == local
+    assert result["command"][result["command"].index("--tier") + 1] == "advanced"
     assert result["timeout"] == 1800
     assert config == before
     assert runtime.validate_ocr_command(config, search_roots=[tmp_path]) == local
@@ -100,3 +101,84 @@ def test_preflight_reports_missing_custom_command_without_running_process(tmp_pa
     client = OcrClient({"command": [str(tmp_path / "custom-missing.exe"), "{input}", "{output}"]})
     with pytest.raises(OcrError, match="可执行文件不存在"):
         client.preflight()
+
+
+@pytest.mark.parametrize("argument", [["--tier", "standard"], ["--tier=standard"]])
+def test_explicit_tier_change_preserves_other_command_options(argument):
+    command = ["mineru-kit", "parse", "{input}", "-o", "{output}", *argument,
+               "--pages", "all", "--ocr-mode", "auto"]
+    before = command.copy()
+    assert runtime.mineru_command_tier(command) == "standard"
+    changed = runtime.with_mineru_tier(command, "advanced")
+    assert runtime.mineru_command_tier(changed) == "advanced"
+    assert changed == ["mineru-kit", "parse", "{input}", "-o", "{output}",
+                       "--pages", "all", "--ocr-mode", "auto", "--tier", "advanced"]
+    assert command == before
+
+
+@pytest.mark.parametrize("command", [
+    ["custom-ocr.exe", "parse", "{input}", "-o", "{output}", "--tier", "standard"],
+    ["mineru", "{input}", "{output}"],
+    ["mineru-kit", "api-server"],
+    {"command": "mineru-kit"}, None, [23], [],
+])
+def test_tier_controls_never_rewrite_unrecognized_commands(command):
+    assert not runtime.is_mineru_tier_command(command)
+    assert runtime.mineru_command_tier(command) is None
+    with pytest.raises(ValueError, match="自定义命令"):
+        runtime.with_mineru_tier(command, "advanced")
+
+
+def test_unknown_tier_is_preserved_until_an_explicit_choice():
+    command = ["mineru-kit", "parse", "{input}", "-o", "{output}", "--tier=future"]
+    assert runtime.is_mineru_tier_command(command)
+    assert runtime.mineru_command_tier(command) is None
+    assert command[-1] == "--tier=future"
+    with pytest.raises(ValueError, match="不支持"):
+        runtime.with_mineru_tier(command, "future")
+
+
+def test_duplicate_tier_flags_collapse_without_consuming_other_options():
+    command = ["mineru-kit", "parse", "{input}", "--tier", "standard", "--tier=basic",
+               "--tier", "--pages", "all", "-o", "{output}"]
+    changed = runtime.with_mineru_tier(command, "advanced")
+    assert changed == ["mineru-kit", "parse", "{input}", "--pages", "all", "-o", "{output}",
+                       "--tier", "advanced"]
+
+
+def test_tier_option_is_inserted_before_positional_separator():
+    command = ["mineru-kit", "parse", "-o", "{output}", "--", "{input}", "--tier=basic"]
+    assert runtime.mineru_command_tier(command) is None
+    changed = runtime.with_mineru_tier(command, "advanced")
+    assert changed == ["mineru-kit", "parse", "-o", "{output}", "--tier", "advanced",
+                       "--", "{input}", "--tier=basic"]
+    assert runtime.mineru_command_tier(changed) == "advanced"
+
+
+def test_repairing_moved_local_launcher_retains_explicit_tier(tmp_path):
+    installation(tmp_path / "new")
+    config = {"command": [str(tmp_path / "gone" / "python.exe"),
+                          str(tmp_path / "gone" / "mineru_local.py"), "parse", "{input}",
+                          "-o", "{output}", "--tier=standard", "--ocr-mode=ocr"]}
+    repaired = runtime.resolve_ocr_config(config, search_roots=[tmp_path / "new"])
+    assert runtime.mineru_command_tier(repaired["command"]) == "standard"
+    assert runtime.mineru_command_ocr_mode(repaired["command"]) == "ocr"
+
+
+@pytest.mark.parametrize("argument", [["--ocr-mode", "auto"], ["--ocr-mode=auto"]])
+def test_text_source_change_preserves_tier_and_other_options(argument):
+    command = ["mineru-kit", "parse", "{input}", "-o", "{output}", "--tier=advanced", *argument]
+    before = command.copy()
+    assert runtime.mineru_command_ocr_mode(command) == "auto"
+    changed = runtime.with_mineru_ocr_mode(command, "ocr")
+    assert runtime.mineru_command_ocr_mode(changed) == "ocr"
+    assert runtime.mineru_command_tier(changed) == "advanced"
+    assert changed == command[:-len(argument)] + ["--ocr-mode", "ocr"]
+    assert command == before
+
+
+def test_text_source_cannot_rewrite_custom_ocr_program():
+    command = ["custom.exe", "parse", "{input}", "{output}", "--ocr-mode=auto"]
+    assert runtime.mineru_command_ocr_mode(command) is None
+    with pytest.raises(ValueError, match="自定义命令"):
+        runtime.with_mineru_ocr_mode(command, "ocr")

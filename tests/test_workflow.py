@@ -19,6 +19,9 @@ from bb_assistant.workflow import Workflow, expand_documents, safe_id, seed_demo
 @pytest.fixture
 def setup(tmp_path):
     data = copy.deepcopy(DEFAULTS)
+    # This suite exercises the explicit OCR/text workflow. Automatic routing is
+    # covered separately with real rendered images and a classifier stub.
+    data["recognition"] = {"mode": "ocr"}
     data["rubric"].update(instructions="每题按参考答案给分", reference_answer="参考答案", max_score=10)
     settings = SimpleNamespace(root=tmp_path, data=data, secret=lambda name: "")
     store = Store(tmp_path)
@@ -90,6 +93,17 @@ def test_missing_ocr_runtime_stops_batch_before_marking_student_failures(setup, 
     setup.client.download_attempt.assert_not_called()
     services.ocr.extract.assert_not_called()
     services.grader.grade.assert_not_called()
+
+
+def test_ocr_coverage_warning_survives_grading_and_regrading(setup, services):
+    warning = "图片描述仅供核对，可能存在未识别答案。"
+    services.ocr.last_metadata["warnings"] = [warning]
+    setup.workflow.process("hw")
+    assert setup.store.get_attempt("a1")["uncertainties"] == [warning]
+    services.grader.grade.return_value["uncertainties"] = [warning, "模型自己的疑点"]
+    setup.workflow.process("hw", "grade")
+    assert setup.store.get_attempt("a1")["uncertainties"] == [warning, "模型自己的疑点"]
+    assert services.ocr.extract.call_count == 1
 
 
 def test_plain_text_batch_does_not_require_mineru(setup, services):
@@ -483,7 +497,7 @@ def test_failed_regrade_does_not_count_stale_ai_in_summary(setup, services):
     assert row["ai_score"] is None
     assert row["ai_comment"] == row["rationale"] == ""
     assert row["uncertainties"] == []
-    assert row["provenance"] == {"ocr": original_ocr}
+    assert row["provenance"] == {"ocr": original_ocr, "source_sha256": setup.workflow._source_hash(row["paths"])}
     assert row["status"] == "error"
     assert summary["errors"] == 1
     assert summary["score_groups"] == []
@@ -505,7 +519,7 @@ def test_each_grade_run_uses_current_rubric_and_preserves_ocr_without_recognitio
         pending = setup.store.get_attempt("a1")
         assert pending["status"] == "ocr_done"
         assert pending["ai_score"] is None
-        assert pending["provenance"] == {"ocr": old["provenance"]["ocr"]}
+        assert pending["provenance"] == {"ocr": old["provenance"]["ocr"], "source_sha256": old["provenance"]["source_sha256"]}
         return {"score": 95, "comment": "按照新标准评分", "rationale": "新评分依据", "uncertainties": []}
 
     services.grader.grade.side_effect = regrade
@@ -573,7 +587,7 @@ def test_regrading_uses_current_policy_and_keeps_exact_snapshot_without_ocr(setu
         def regrade(*args, **kwargs):
             pending = setup.store.get_attempt("a1")
             assert pending["ai_score"] is None
-            assert pending["provenance"] == {"ocr": original["provenance"]["ocr"]}
+            assert pending["provenance"] == {"ocr": original["provenance"]["ocr"], "source_sha256": original["provenance"]["source_sha256"]}
             assert args[0] == original["ocr_text"]
             assert kwargs == ({"scoring_policy": policy} if policy is not None else {})
             if policy is not None:
@@ -616,7 +630,7 @@ def test_failed_error_count_regrade_removes_previous_calculation(setup, services
     assert summary["failed"] == 1
     row = setup.store.get_attempt("a1")
     assert row["ai_score"] is None
-    assert row["provenance"] == {"ocr": original_ocr}
+    assert row["provenance"] == {"ocr": original_ocr, "source_sha256": setup.workflow._source_hash(row["paths"])}
     assert row["status"] == "error"
     services.ocr_type.assert_not_called()
 

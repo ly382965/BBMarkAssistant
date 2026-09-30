@@ -24,6 +24,7 @@ pycryptodome==3.23.0
 pygments==2.21.0
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.7
+pypdfium2==5.13.0
 pyside6==6.11.2
 pyside6-addons==6.11.2
 pyside6-essentials==6.11.2

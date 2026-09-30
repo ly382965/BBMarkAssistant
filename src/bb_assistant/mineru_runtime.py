@@ -10,8 +10,84 @@ from typing import Iterable
 
 
 DEFAULT_MINERU_COMMAND = [
-    "mineru-kit", "parse", "{input}", "-o", "{output}/document.md", "--tier", "standard"
+    "mineru-kit", "parse", "{input}", "-o", "{output}/document.md", "--tier", "advanced"
 ]
+MINERU_TIERS = ("advanced", "standard", "basic", "flash")
+MINERU_OCR_MODES = ("auto", "ocr", "txt")
+
+
+def is_mineru_tier_command(command: object) -> bool:
+    """Recognize only supported MinerU 4 parse launchers, not arbitrary OCR CLIs."""
+    if not isinstance(command, list) or not command or any(not isinstance(arg, str) for arg in command):
+        return False
+    if Path(command[0]).name.lower() in {"mineru-kit", "mineru-kit.exe"}:
+        return len(command) > 1 and command[1] == "parse"
+    return _is_local_wrapper(command) and len(command) > 2 and command[2] == "parse"
+
+
+def is_local_mineru_wrapper(command: object) -> bool:
+    """Whether the command uses the app's parse wrapper and its local helpers."""
+    return is_mineru_tier_command(command) and _is_local_wrapper(command)
+
+
+def _mineru_option_value(command: object, option: str, choices: tuple[str, ...]) -> str | None:
+    if not is_mineru_tier_command(command):
+        return None
+    value = None
+    for index, arg in enumerate(command):
+        if arg == "--":
+            break
+        if arg == option:
+            value = command[index + 1] if index + 1 < len(command) else None
+        elif arg.startswith(option + "="):
+            value = arg.partition("=")[2]
+    return value if value in choices else None
+
+
+def mineru_command_tier(command: object) -> str | None:
+    """Read an explicit tier without guessing defaults or changing unknown values."""
+    return _mineru_option_value(command, "--tier", MINERU_TIERS)
+
+
+def mineru_command_ocr_mode(command: object) -> str | None:
+    """Read the PDF text source independently from the parsing quality tier."""
+    return _mineru_option_value(command, "--ocr-mode", MINERU_OCR_MODES)
+
+
+def with_mineru_tier(command: list[str], tier: str) -> list[str]:
+    """Change a recognized parse command only after an explicit tier selection."""
+    if tier not in MINERU_TIERS:
+        raise ValueError("不支持的本地 MinerU 识别档位。")
+    return _with_mineru_option(command, "--tier", tier)
+
+
+def with_mineru_ocr_mode(command: list[str], mode: str) -> list[str]:
+    """Set a PDF text source only on a recognized MinerU 4 parse launcher."""
+    if mode not in MINERU_OCR_MODES:
+        raise ValueError("不支持的本地 MinerU PDF 文字识别方式。")
+    return _with_mineru_option(command, "--ocr-mode", mode)
+
+
+def _with_mineru_option(command: list[str], option: str, value: str) -> list[str]:
+    if not is_mineru_tier_command(command):
+        raise ValueError("自定义命令未识别为 MinerU 4；请直接编辑命令参数。")
+    result = []
+    index = 0
+    while index < len(command):
+        arg = command[index]
+        if arg == "--":
+            return result + [option, value] + command[index:]
+        if arg == option:
+            index += 1
+            if index < len(command) and not command[index].startswith("--"):
+                index += 1
+            continue
+        if arg.startswith(option + "="):
+            index += 1
+            continue
+        result.append(arg)
+        index += 1
+    return result + [option, value]
 
 
 def _candidate_roots() -> list[Path]:
@@ -36,7 +112,7 @@ def discover_local_command(search_roots: Iterable[Path] | None = None) -> list[s
             continue
         return [
             str(executable), str(wrapper), "parse", "{input}", "-o", "{output}/document.md",
-            "--tier", "standard", "--pages", "all", "--ocr-mode", "auto",
+            "--tier", "advanced", "--pages", "all", "--ocr-mode", "auto",
         ]
     return None
 
@@ -79,6 +155,13 @@ def resolve_ocr_config(config: dict, *, search_roots: Iterable[Path] | None = No
         return result
     local = discover_local_command(search_roots)
     if local is not None:
+        # Repairing a relocated installation must keep an explicitly chosen tier.
+        tier = mineru_command_tier(command)
+        if tier is not None and tier != mineru_command_tier(local):
+            local = with_mineru_tier(local, tier)
+        ocr_mode = mineru_command_ocr_mode(command)
+        if ocr_mode is not None and ocr_mode != mineru_command_ocr_mode(local):
+            local = with_mineru_ocr_mode(local, ocr_mode)
         result["command"] = local
     return result
 

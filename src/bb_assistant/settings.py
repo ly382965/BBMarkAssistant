@@ -50,16 +50,23 @@ DEFAULTS = {
     "bb": {"base_url": "https://www.bb.ustc.edu.cn", "course_id": "_12345_1", "timeout": 60},
     "ocr": {
         "mode": "command",
-        "command": ["mineru-kit", "parse", "{input}", "-o", "{output}/document.md", "--tier", "standard"],
+        "command": ["mineru-kit", "parse", "{input}", "-o", "{output}/document.md", "--tier", "advanced"],
         "endpoint": "http://127.0.0.1:8000/file_parse",
         "timeout": 900,
         "backend": "pipeline",
         "extra_params": {},
     },
     "grading": {
-        "base_url": "https://api.deepseek.com", "model": "deepseek-chat", "temperature": 0,
-        "max_tokens": 4096, "timeout": 180, "max_input_chars": 100000, "extra_body": {},
+        "base_url": "https://api.deepseek.com", "model": "deepseek-flash", "wire_api": "chat", "temperature": 0,
+        "max_tokens": 16384, "timeout": 180, "max_input_chars": 100000, "extra_body": {},
     },
+    "gpt": {
+        "base_url": "https://api.openai.com/v1", "model": "gpt-5.6-sol", "wire_api": "responses",
+        "reasoning_effort": "high", "max_tokens": 8192, "timeout": 180,
+        "max_input_chars": 100000, "extra_body": {}, "http_headers": {},
+    },
+    "recognition": {"mode": "auto", "render_dpi": 200, "max_page_edge": 2200, "max_pages": 60},
+    "actor_critic": {"max_revisions": 1},
     "rubric": {"max_score": 10, "instructions": "", "reference_answer": ""},
 }
 
@@ -96,7 +103,7 @@ class Settings:
 
     def save(self, data: dict):
         from .mineru_runtime import resolve_ocr_config
-        data = copy.deepcopy(data)
+        data = merge_config(DEFAULTS, data)
         # The installer can finish while this window still has the old command.
         # Resolve again on every save so those stale widgets cannot undo setup.
         data["ocr"] = resolve_ocr_config(data["ocr"])
@@ -116,6 +123,25 @@ class Settings:
         _validate_connection_url(data["bb"].get("cas_service", ""), "CAS service", optional=True)
         _validate_connection_url(data["ocr"]["endpoint"], "OCR API 地址")
         _validate_connection_url(data["grading"]["base_url"], "评分 API 地址")
+        _validate_connection_url(data["gpt"]["base_url"], "GPT API 地址")
+        if data["recognition"].get("mode") not in {"auto", "ocr", "vision"}:
+            raise ValueError("作业识别路线必须为 auto、ocr 或 vision。")
+        collaboration = data.get("actor_critic")
+        revisions = collaboration.get("max_revisions") if isinstance(collaboration, dict) else None
+        if type(revisions) is not int or not 0 <= revisions <= 2:
+            raise ValueError("DS / GPT 协作最大修订次数必须为 0 到 2 的整数。")
+        for provider in ("grading", "gpt"):
+            if data[provider].get("wire_api", "chat") not in {"chat", "responses"}:
+                raise ValueError("评分 API 协议必须为 chat 或 responses。")
+            headers = data[provider].get("http_headers", {})
+            if not isinstance(headers, dict):
+                raise ValueError("http_headers 必须为 JSON 对象。")
+            for name, value in headers.items():
+                normalized = "".join(char for char in name.lower() if char.isalnum())
+                if normalized in _CREDENTIAL_PARAMETERS or normalized in {"host", "contentlength"}:
+                    raise ValueError("http_headers 不能包含凭据或覆盖 Host / Content-Length。")
+                if not isinstance(value, str) or any(c in name + value for c in "\r\n"):
+                    raise ValueError("http_headers 包含无效 HTTP 头。")
         parsed = urlparse(data["course_url"])
         if parsed.scheme != "https" or not parsed.hostname:
             raise ValueError("BB 课程地址必须是完整 HTTPS URL。")
@@ -129,7 +155,11 @@ class Settings:
         temporary.replace(self.path)
         self.data = data
 
-    def secret(self, name: str) -> str:
+    def secret(self, name: str, *, include_environment: bool = True) -> str:
+        # Provider-specific names prevent accidentally taking Codex's API key.
+        variable = {"gpt": "BBMARK_GPT_API_KEY", "deepseek": "BBMARK_DEEPSEEK_API_KEY"}.get(name)
+        if include_environment and variable and os.environ.get(variable, "").strip():
+            return os.environ[variable].strip()
         if name in self._secrets:
             return self._secrets[name]
         try:

@@ -9,4 +9,10 @@ if (-not (Test-Path -LiteralPath '.appvenv/Scripts/python.exe')) {
     uv pip install --python .appvenv/Scripts/python.exe -e .
     if ($LASTEXITCODE -ne 0) { throw '安装依赖失败' }
 }
+# Existing source installations also need the new PDF rendering dependency.
+& .appvenv/Scripts/python.exe -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pypdfium2') else 1)"
+if ($LASTEXITCODE -ne 0) {
+    uv pip install --python .appvenv/Scripts/python.exe -e .
+    if ($LASTEXITCODE -ne 0) { throw '更新应用依赖失败' }
+}
 & .appvenv/Scripts/python.exe -m bb_assistant @args

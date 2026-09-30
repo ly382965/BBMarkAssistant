@@ -19,8 +19,10 @@ def test_stale_in_memory_command_cannot_undo_installer(tmp_path, monkeypatch):
     local = ["C:/local/python.exe", "C:/local/scripts/mineru_local.py", "parse", "{input}", "-o", "{output}/document.md"]
     monkeypatch.setattr("bb_assistant.mineru_runtime.discover_local_command", lambda *args, **kwargs: local)
     config.save(stale)
-    assert config.data["ocr"]["command"] == local
-    assert json.loads(config.path.read_text(encoding="utf-8"))["ocr"]["command"] == local
+    # The installed launcher supplies the path; the user's explicit tier survives repair.
+    expected = local + ["--tier", "advanced"]
+    assert config.data["ocr"]["command"] == expected
+    assert json.loads(config.path.read_text(encoding="utf-8"))["ocr"]["command"] == expected
     assert config.data["grading"] == stale["grading"]
     assert config.data["rubric"] == stale["rubric"]
 

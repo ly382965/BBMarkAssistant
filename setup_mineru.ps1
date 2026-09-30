@@ -32,7 +32,7 @@ if ($LASTEXITCODE -ne 0) { throw '安装 MinerU 失败；请检查官方平台�
 
 & $mineruPython $configureScript --models-only
 if ($LASTEXITCODE -ne 0) { throw '生成 MinerU 本地模型配置失败' }
-Write-Host '正在下载 Standard OCR 模型，模型与缓存均保存在当前项目目录。'
+Write-Host '正在下载 Advanced 解析所需的 Standard 模型，模型与缓存均保存在当前项目目录。'
 & $mineruPython $localWrapper models download --tier standard --small-backend onnx --vlm-engine llama-cpp --source $ModelSource
 if ($LASTEXITCODE -ne 0) { throw 'MinerU 模型下载失败；应用 OCR 设置尚未更新，重新运行可续传' }
 & $mineruPython $localWrapper models verify --tier standard --small-backend onnx --vlm-engine llama-cpp
@@ -44,5 +44,5 @@ foreach ($dataPath in $AppData) {
 }
 & $mineruPython @configureArgs
 if ($LASTEXITCODE -ne 0) { throw 'MinerU 已安装，但更新应用 OCR 设置失败；请查看输出和设置文件权限' }
-Write-Host 'MinerU 与 Standard 模型已安装并验证，OCR 本地命令已配置。请关闭并重新打开 BB 作业批改助手。'
+Write-Host 'MinerU 模型已安装并验证，OCR 本地命令已配置为 Advanced。请关闭并重新打开 BB 作业批改助手。'
 Write-Host '模型完整性验证不等于实际文档识别；在应用中选择一份 PDF 执行 OCR 即可检查识别效果。'

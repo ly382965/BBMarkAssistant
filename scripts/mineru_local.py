@@ -128,7 +128,7 @@ def normalize_parse_args(argv: list[str]) -> list[str]:
     """Normalize format-specific options for a single DOCX or raster input.
 
     MinerU 4 accepts Office files only with ``flash``. Its single-file CLI
-    rejects the PDF/image ``standard`` tier in the app's default command.
+    rejects the PDF/image ``advanced`` tier in the app's default command.
     DOCX and raster images always parse in full; even ``--pages all`` is
     rejected for these inputs, so PDF-only page options are removed.
     Match the parse command's option grammar so an output filename or an API

@@ -46,7 +46,7 @@ def test_configure_preserves_settings_backup_and_absolute_paths(tmp_path):
     assert current["ocr"]["mode"] == "command"
     command = current["ocr"]["command"]
     assert all(Path(value).is_absolute() for value in command[:2])
-    assert command[2:] == ["parse", "{input}", "-o", "{output}/document.md", "--tier", "standard", "--pages", "all", "--ocr-mode", "auto"]
+    assert command[2:] == ["parse", "{input}", "-o", "{output}/document.md", "--tier", "advanced", "--pages", "all", "--ocr-mode", "auto"]
     backups = list(app_data.glob("settings.json.before-mineru-*.bak"))
     assert len(backups) == 1 and backups[0].read_bytes() == before
     setup.configure_application(project, [app_data])

@@ -32,8 +32,8 @@ _FALLBACK_DEFAULTS = {
         "extra_params": {},
     },
     "grading": {
-        "base_url": "https://api.deepseek.com", "model": "deepseek-chat", "temperature": 0,
-        "max_tokens": 4096, "timeout": 180, "max_input_chars": 100000, "extra_body": {},
+        "base_url": "https://api.deepseek.com", "model": "deepseek-flash", "wire_api": "chat", "temperature": 0,
+        "max_tokens": 16384, "timeout": 180, "max_input_chars": 100000, "extra_body": {},
     },
     "rubric": {"max_score": 10, "instructions": "", "reference_answer": ""},
 }
@@ -109,7 +109,7 @@ def mineru_command(project: Path) -> list[str]:
         str(project / ".mineru-venv" / "Scripts" / "python.exe"),
         str(project / "scripts" / "mineru_local.py"),
         "parse", "{input}", "-o", "{output}/document.md",
-        "--tier", "standard", "--pages", "all", "--ocr-mode", "auto",
+        "--tier", "advanced", "--pages", "all", "--ocr-mode", "auto",
     ]
 
 
@@ -156,6 +156,8 @@ def configure_application(project: Path, app_data: list[Path] | None = None) -> 
 
 
 def verify_models(project: Path) -> None:
+    # Advanced parsing shares Standard's models; the model CLI only accepts
+    # basic/standard deployment tiers, not the advanced parsing tier.
     command = mineru_command(project)[:2]
     if not all(Path(path).is_file() for path in command):
         raise ConfigurationError("MinerU runtime or local wrapper is missing; run setup_mineru.ps1 first.")

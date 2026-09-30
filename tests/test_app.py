@@ -74,16 +74,16 @@ def test_ocr_defaults_to_missing_and_force_is_only_for_one_explicit_run(qtbot, t
     monkeypatch.setattr(window.workflow, "process", lambda *args, **kwargs: calls.append((args, kwargs)))
     assert not window.force_ocr.isChecked()
     window.process("ocr")
-    assert calls[-1] == (("demo-homework", "ocr"), {"force_ocr": False})
+    assert calls[-1] == (("demo-homework", "ocr"), {"force_ocr": False, "provider": "deepseek"})
     window.force_ocr.setChecked(True)
     window.process("ocr")
-    assert calls[-1][1] == {"force_ocr": True}
+    assert calls[-1][1] == {"force_ocr": True, "provider": "deepseek"}
     assert not window.force_ocr.isChecked()
     window.process("ocr")
-    assert calls[-1][1] == {"force_ocr": False}
+    assert calls[-1][1] == {"force_ocr": False, "provider": "deepseek"}
     window.force_ocr.setChecked(True)
     window.process("all")
-    assert calls[-1] == (("demo-homework", "all"), {"force_ocr": False})
+    assert calls[-1] == (("demo-homework", "all"), {"force_ocr": False, "provider": "deepseek"})
 
 
 def test_regrade_button_saves_current_prompt_on_every_click(qtbot, tmp_path, monkeypatch):
@@ -95,7 +95,7 @@ def test_regrade_button_saves_current_prompt_on_every_click(qtbot, tmp_path, mon
     monkeypatch.setattr(window, "start", lambda fn: fn())
     monkeypatch.setattr(window.workflow, "process", lambda *args, **kwargs: calls.append(
         (args, copy.deepcopy(window.settings.data["rubric"]))))
-    button = next(b for b in window.mutation_buttons if b.text() == "③ 重新评分")
+    button = next(b for b in window.mutation_buttons if b.text() == "DS 评分")
     for index in (1, 2):
         window.rubric_text.setPlainText(f"修订规则 {index}")
         window.reference.setPlainText(f"修订参考答案 {index}")
@@ -107,7 +107,7 @@ def test_regrade_button_saves_current_prompt_on_every_click(qtbot, tmp_path, mon
         })
     assert len(calls) == 2
     window.save_rubric()
-    assert "③ 重新评分" in window.log_box.toPlainText()
+    assert "DS 评分" in window.log_box.toPlainText()
 
 
 def test_workbench_only_shows_latest_attempt_without_deleting_history(qtbot, tmp_path):

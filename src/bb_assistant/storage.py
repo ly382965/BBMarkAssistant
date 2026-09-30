@@ -540,12 +540,27 @@ class Store:
                               out, ensure_ascii=False, indent=2, allow_nan=False)
                 else:
                     columns = ["id", "student_id", "name", "in_scope", "assignment_title", "assignment_max_score",
+                               "gpt_score", "gpt_comment", "ds_score", "ds_comment", "active_grader",
+                               "actor_critic_score", "actor_critic_comment", "actor_critic_status",
                                "ai_score", "ai_comment", "reviewed_score", "reviewed_comment", "reviewed_max_score",
                                "reviewed_at", "status", "uploaded_at", "error"]
                     writer = csv.DictWriter(out, fieldnames=columns)
                     writer.writeheader()
                     for row in rows:
-                        writer.writerow({key: self._csv_safe(row.get(key)) for key in columns})
+                        provenance = row.get("provenance") or {}
+                        grades = provenance.get("grades") or {}
+                        values = dict(row)
+                        values.update(
+                            gpt_score=grades.get("gpt", {}).get("score"),
+                            gpt_comment=grades.get("gpt", {}).get("comment"),
+                            ds_score=grades.get("deepseek", {}).get("score"),
+                            ds_comment=grades.get("deepseek", {}).get("comment"),
+                            actor_critic_score=grades.get("actor_critic", {}).get("score"),
+                            actor_critic_comment=grades.get("actor_critic", {}).get("comment"),
+                            actor_critic_status=(provenance.get("actor_critic") or {}).get("status", ""),
+                            active_grader=provenance.get("active_grader", "legacy" if row.get("ai_score") is not None else ""),
+                        )
+                        writer.writerow({key: self._csv_safe(values.get(key)) for key in columns})
             os.replace(temporary, path)
         finally:
             if temporary is not None and temporary.exists():

@@ -288,7 +288,7 @@ def test_error_count_policy_computes_score_locally_even_if_model_claims_full_sco
     assert metadata["wrong_question_count"] == count
     assert metadata["model_reported_score"] == 10
     assert metadata["scoring_policy"] == count_policy(deduction_per_error="0.5")
-    assert metadata["prompt_version"] == "bb-assistant-grading-error-count-v1"
+    assert metadata["prompt_version"] == "bb-assistant-grading-error-count-v2"
 
 
 def test_error_count_response_needs_facts_not_model_score_and_preserves_uncertainties():
